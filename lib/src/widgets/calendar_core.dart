@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/src/shared/utils.dart';
 import 'package:table_calendar/src/widgets/calendar_page.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class CalendarCore extends StatelessWidget {
   final DateTime? focusedDay;
@@ -27,6 +28,7 @@ class CalendarCore extends StatelessWidget {
   final StartingDayOfWeek startingDayOfWeek;
   final PageController? pageController;
   final ScrollPhysics? scrollPhysics;
+  final tz.Location? timeZone;
   final void Function(int, DateTime) onPageChanged;
 
   const CalendarCore({
@@ -43,6 +45,7 @@ class CalendarCore extends StatelessWidget {
     this.calendarFormat = CalendarFormat.month,
     this.pageController,
     this.focusedDay,
+    this.timeZone,
     this.previousIndex,
     this.sixWeekMonthsEnforced = false,
     this.dowVisible = true,
@@ -164,15 +167,16 @@ class CalendarCore extends StatelessWidget {
 
     switch (format) {
       case CalendarFormat.month:
-        day = DateTime.utc(prevFocusedDay.year, prevFocusedDay.month + pageDif);
+        day = _createDateTime(
+            prevFocusedDay.year, prevFocusedDay.month + pageDif);
       case CalendarFormat.twoWeeks:
-        day = DateTime.utc(
+        day = _createDateTime(
           prevFocusedDay.year,
           prevFocusedDay.month,
           prevFocusedDay.day + pageDif * 14,
         );
       case CalendarFormat.week:
-        day = DateTime.utc(
+        day = _createDateTime(
           prevFocusedDay.year,
           prevFocusedDay.month,
           prevFocusedDay.day + pageDif * 7,
@@ -193,15 +197,15 @@ class CalendarCore extends StatelessWidget {
 
     switch (format) {
       case CalendarFormat.month:
-        day = DateTime.utc(firstDay.year, firstDay.month + pageIndex);
+        day = _createDateTime(firstDay.year, firstDay.month + pageIndex);
       case CalendarFormat.twoWeeks:
-        day = DateTime.utc(
+        day = _createDateTime(
           firstDay.year,
           firstDay.month,
           firstDay.day + pageIndex * 14,
         );
       case CalendarFormat.week:
-        day = DateTime.utc(
+        day = _createDateTime(
           firstDay.year,
           firstDay.month,
           firstDay.day + pageIndex * 7,
@@ -263,7 +267,7 @@ class CalendarCore extends StatelessWidget {
     final dayCount = last.difference(first).inDays + 1;
     return List.generate(
       dayCount,
-      (index) => DateTime.utc(first.year, first.month, first.day + index),
+      (index) => _createDateTime(first.year, first.month, first.day + index),
     );
   }
 
@@ -273,13 +277,31 @@ class CalendarCore extends StatelessWidget {
   }
 
   DateTime _firstDayOfMonth(DateTime month) {
-    return DateTime.utc(month.year, month.month);
+    final location = timeZone;
+
+    if (location == null) {
+      return DateTime.utc(month.year, month.month);
+    }
+
+    final localized = tz.TZDateTime.from(month, location);
+    return tz.TZDateTime(location, localized.year, localized.month);
   }
 
   DateTime _lastDayOfMonth(DateTime month) {
-    final date = month.month < 12
-        ? DateTime.utc(month.year, month.month + 1)
-        : DateTime.utc(month.year + 1);
+    final location = timeZone;
+
+    if (location == null) {
+      final date = month.month < 12
+          ? DateTime.utc(month.year, month.month + 1)
+          : DateTime.utc(month.year + 1);
+      return date.subtract(const Duration(days: 1));
+    }
+
+    final localized = tz.TZDateTime.from(month, location);
+    final date = localized.month < 12
+        ? tz.TZDateTime(location, localized.year, localized.month + 1)
+        : tz.TZDateTime(location, localized.year + 1);
+
     return date.subtract(const Duration(days: 1));
   }
 
@@ -301,6 +323,16 @@ class CalendarCore extends StatelessWidget {
     final lastToDisplay = last.add(Duration(days: daysAfter));
 
     return (lastToDisplay.difference(firstToDisplay).inDays + 1) ~/ 7;
+  }
+
+  DateTime _createDateTime(int year, int month, [int day = 1]) {
+    final location = timeZone;
+
+    if (location == null) {
+      return DateTime.utc(year, month, day);
+    }
+
+    return tz.TZDateTime(location, year, month, day);
   }
 
   int _getDaysBefore(DateTime firstDay) {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:simple_gesture_detector/simple_gesture_detector.dart';
 import 'package:table_calendar/src/shared/utils.dart';
 import 'package:table_calendar/src/widgets/calendar_core.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class TableCalendarBase extends StatefulWidget {
   final DateTime firstDay;
@@ -31,6 +32,7 @@ class TableCalendarBase extends StatefulWidget {
   final StartingDayOfWeek startingDayOfWeek;
   final AvailableGestures availableGestures;
   final SimpleSwipeConfig simpleSwipeConfig;
+  final tz.Location? timeZone;
   final Map<CalendarFormat, String> availableCalendarFormats;
   final SwipeCallback? onVerticalSwipe;
   final void Function(DateTime focusedDay)? onPageChanged;
@@ -61,6 +63,7 @@ class TableCalendarBase extends StatefulWidget {
     this.pageAnimationCurve = Curves.easeOut,
     this.startingDayOfWeek = StartingDayOfWeek.sunday,
     this.availableGestures = AvailableGestures.all,
+    this.timeZone,
     this.simpleSwipeConfig = const SimpleSwipeConfig(
       verticalThreshold: 25.0,
       swipeDetectionBehavior: SwipeDetectionBehavior.continuousDistinct,
@@ -218,6 +221,7 @@ class _TableCalendarBaseState extends State<TableCalendarBase> {
               scrollPhysics: _canScrollHorizontally
                   ? const PageScrollPhysics()
                   : const NeverScrollableScrollPhysics(),
+              timeZone: widget.timeZone,
               firstDay: widget.firstDay,
               lastDay: widget.lastDay,
               startingDayOfWeek: widget.startingDayOfWeek,
@@ -344,13 +348,31 @@ class _TableCalendarBaseState extends State<TableCalendarBase> {
   }
 
   DateTime _firstDayOfMonth(DateTime month) {
-    return DateTime.utc(month.year, month.month);
+    final location = widget.timeZone;
+
+    if (location == null) {
+      return DateTime.utc(month.year, month.month);
+    }
+
+    final localized = tz.TZDateTime.from(month, location);
+    return tz.TZDateTime(location, localized.year, localized.month);
   }
 
   DateTime _lastDayOfMonth(DateTime month) {
-    final date = month.month < 12
-        ? DateTime.utc(month.year, month.month + 1)
-        : DateTime.utc(month.year + 1);
+    final location = widget.timeZone;
+
+    if (location == null) {
+      final date = month.month < 12
+          ? DateTime.utc(month.year, month.month + 1)
+          : DateTime.utc(month.year + 1);
+      return date.subtract(const Duration(days: 1));
+    }
+
+    final localized = tz.TZDateTime.from(month, location);
+    final date = localized.month < 12
+        ? tz.TZDateTime(location, localized.year, localized.month + 1)
+        : tz.TZDateTime(location, localized.year + 1);
+
     return date.subtract(const Duration(days: 1));
   }
 }

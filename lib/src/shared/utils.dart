@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import 'package:flutter/widgets.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 /// Signature for a function that creates a widget for a given `day`.
 typedef DayBuilder = Widget? Function(BuildContext context, DateTime day);
@@ -41,9 +42,14 @@ int getWeekdayNumber(StartingDayOfWeek weekday) {
   return StartingDayOfWeek.values.indexOf(weekday) + 1;
 }
 
-/// Returns `date` in UTC format, without its time part.
-DateTime normalizeDate(DateTime date) {
-  return DateTime.utc(date.year, date.month, date.day);
+/// Returns `date` normalized to midnight within provided [location] or UTC when absent.
+DateTime normalizeDate(DateTime date, {tz.Location? location}) {
+  if (location == null) {
+    return DateTime.utc(date.year, date.month, date.day);
+  }
+
+  final target = tz.TZDateTime.from(date, location);
+  return tz.TZDateTime(location, target.year, target.month, target.day);
 }
 
 /// Checks if two DateTime objects are the same day.

@@ -14,6 +14,7 @@ import 'package:table_calendar/src/shared/utils.dart';
 import 'package:table_calendar/src/table_calendar_base.dart';
 import 'package:table_calendar/src/widgets/calendar_header.dart';
 import 'package:table_calendar/src/widgets/cell_content.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 /// Signature for `onDaySelected` callback. Contains the selected day and focused day.
 typedef OnDaySelected = void Function(
@@ -38,6 +39,11 @@ class TableCalendar<T> extends StatefulWidget {
   ///
   /// If nothing is provided, a default locale will be used.
   final dynamic locale;
+
+  /// Time zone used to interpret provided dates and perform calendar calculations.
+  ///
+  /// When `null`, all dates will be normalized using UTC, preserving the previous default behavior.
+  final tz.Location? timeZone;
 
   /// The start of the selected day range.
   final DateTime? rangeStartDay;
@@ -221,6 +227,7 @@ class TableCalendar<T> extends StatefulWidget {
     required DateTime lastDay,
     DateTime? currentDay,
     this.locale,
+    this.timeZone,
     this.rangeStartDay,
     this.rangeEndDay,
     this.weekendDays = const [DateTime.saturday, DateTime.sunday],
@@ -278,10 +285,15 @@ class TableCalendar<T> extends StatefulWidget {
                 (day) => day >= DateTime.monday && day <= DateTime.sunday,
               ),
         ),
-        focusedDay = normalizeDate(focusedDay),
-        firstDay = normalizeDate(firstDay),
-        lastDay = normalizeDate(lastDay),
-        currentDay = currentDay ?? DateTime.now();
+        focusedDay = normalizeDate(focusedDay, location: timeZone),
+        firstDay = normalizeDate(firstDay, location: timeZone),
+        lastDay = normalizeDate(lastDay, location: timeZone),
+        currentDay = timeZone == null
+            ? (currentDay ?? DateTime.now())
+            : normalizeDate(
+                currentDay ?? tz.TZDateTime.now(timeZone),
+                location: timeZone,
+              );
 
   @override
   State<TableCalendar<T>> createState() => _TableCalendarState<T>();
@@ -499,6 +511,7 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
             availableGestures: widget.availableGestures,
             firstDay: widget.firstDay,
             lastDay: widget.lastDay,
+            timeZone: widget.timeZone,
             startingDayOfWeek: widget.startingDayOfWeek,
             dowDecoration: widget.daysOfWeekStyle.decoration,
             rowDecoration: widget.calendarStyle.rowDecoration,
@@ -722,7 +735,13 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
   }
 
   int _dayOfYear(DateTime date) {
-    return normalizeDate(date).difference(DateTime.utc(date.year)).inDays + 1;
+    final normalized = normalizeDate(date, location: widget.timeZone);
+
+    final startOfYear = widget.timeZone == null
+        ? DateTime.utc(normalized.year)
+        : tz.TZDateTime(widget.timeZone!, normalized.year);
+
+    return normalized.difference(startOfYear).inDays + 1;
   }
 
   bool _isWithinRange(DateTime day, DateTime start, DateTime end) {
@@ -752,13 +771,31 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
   }
 
   DateTime _firstDayOfMonth(DateTime month) {
-    return DateTime.utc(month.year, month.month);
+    final location = widget.timeZone;
+
+    if (location == null) {
+      return DateTime.utc(month.year, month.month);
+    }
+
+    final localized = tz.TZDateTime.from(month, location);
+    return tz.TZDateTime(location, localized.year, localized.month);
   }
 
   DateTime _lastDayOfMonth(DateTime month) {
-    final date = month.month < 12
-        ? DateTime.utc(month.year, month.month + 1)
-        : DateTime.utc(month.year + 1);
+    final location = widget.timeZone;
+
+    if (location == null) {
+      final date = month.month < 12
+          ? DateTime.utc(month.year, month.month + 1)
+          : DateTime.utc(month.year + 1);
+      return date.subtract(const Duration(days: 1));
+    }
+
+    final localized = tz.TZDateTime.from(month, location);
+    final date = localized.month < 12
+        ? tz.TZDateTime(location, localized.year, localized.month + 1)
+        : tz.TZDateTime(location, localized.year + 1);
+
     return date.subtract(const Duration(days: 1));
   }
 

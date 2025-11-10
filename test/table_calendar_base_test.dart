@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:simple_gesture_detector/simple_gesture_detector.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
 import 'common.dart';
 
@@ -17,6 +19,10 @@ Widget setupTestWidget(Widget child) {
 }
 
 void main() {
+  setUpAll(() {
+    tzdata.initializeTimeZones();
+  });
+
   group('Correct days are displayed for given focusedDay when:', () {
     testWidgets(
       'in month format, starting day is Sunday',
@@ -286,6 +292,45 @@ void main() {
 
         expect(find.byKey(startOOBKey), findsNothing);
         expect(find.byKey(endOOBKey), findsNothing);
+      },
+    );
+  });
+
+  group('time zone support', () {
+    testWidgets(
+      'dayBuilder receives TZDateTime instances for provided location',
+      (tester) async {
+        final location = tz.getLocation('America/Los_Angeles');
+        final capturedDays = <DateTime>[];
+
+        await tester.pumpWidget(
+          setupTestWidget(
+            TableCalendarBase(
+              firstDay: tz.TZDateTime(location, 2021, 5, 1),
+              lastDay: tz.TZDateTime(location, 2021, 7, 31),
+              focusedDay: tz.TZDateTime(location, 2021, 6, 15),
+              timeZone: location,
+              dowVisible: false,
+              rowHeight: 52,
+              dayBuilder: (context, day, focusedDay) {
+                capturedDays.add(day);
+                return const SizedBox();
+              },
+            ),
+          ),
+        );
+
+        expect(capturedDays, isNotEmpty);
+        expect(
+          capturedDays.whereType<tz.TZDateTime>(),
+          hasLength(capturedDays.length),
+        );
+        expect(
+          capturedDays
+              .whereType<tz.TZDateTime>()
+              .every((day) => day.location == location),
+          isTrue,
+        );
       },
     );
   });
